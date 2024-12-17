@@ -1,145 +1,79 @@
 import cv2
 import numpy as np
-from scipy.fftpack import dct
-from scipy.spatial.distance import cdist
-import matplotlib.pyplot as plt
-import os
+from sklearn.cluster import DBSCAN
 import tkinter as tk
 from tkinter import filedialog
-from tkinter import messagebox
-import time  # To create unique output filenames using timestamps
 
-# Load the image
-def load_image(image_path, resize_factor=0.8):
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    if img is None:
-        raise FileNotFoundError(f"Image not found at {image_path}")
-    # Resize the image to speed up processing
-    h, w = img.shape
-    img_resized = cv2.resize(img, (int(w * resize_factor), int(h * resize_factor)))
-    return img_resized
+class Detect(object):
+    def __init__(self, image):
+        self.image = image
 
-# Divide the image into overlapping blocks with stride to reduce block overlap
-def divide_into_blocks(img, block_size, stride=2):
-    h, w = img.shape
-    blocks = []
-    positions = []
-    for i in range(0, h - block_size + 1, stride):
-        for j in range(0, w - block_size + 1, stride):
-            block = img[i:i + block_size, j:j + block_size]
-            blocks.append(block)
-            positions.append((i, j))
-    return blocks, positions
+    def siftDetector(self):
+        sift = cv2.SIFT_create()  # Corrected SIFT creation method
+        gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+        self.key_points, self.descriptors = sift.detectAndCompute(gray, None)
+        return self.key_points, self.descriptors
 
-# Apply DCT on a block
-def compute_dct(block):
-    return dct(dct(block.T, norm='ortho').T, norm='ortho')
+    def showSiftFeatures(self):
+        gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+        sift_image = cv2.drawKeypoints(self.image, self.key_points, self.image.copy())
+        return sift_image
 
-# Extract features from blocks, using more DCT coefficients
-def extract_features(blocks, max_blocks=1000):
-    features = []
-    for idx, block in enumerate(blocks):
-        if idx >= max_blocks:  # Limit the number of blocks to process
-            break
-        dct_block = compute_dct(block)
-        features.append(dct_block.flatten()[:30])  # Use first 30 coefficients (more information)
-    features = np.array(features)
-    return features
+    def locateForgery(self, eps=40, min_sample=2):
+        clusters = DBSCAN(eps=eps, min_samples=min_sample).fit(self.descriptors)
+        size = np.unique(clusters.labels_).shape[0] - 1
+        forgery = self.image.copy()
+        
+        if (size == 0) and (np.unique(clusters.labels_)[0] == -1):
+            print('No Forgery Found!!')
+            return None
+        
+        if size == 0:
+            size = 1
+            
+        cluster_list = [[] for i in range(size)]
+        for idx in range(len(self.key_points)):
+            if clusters.labels_[idx] != -1:
+                cluster_list[clusters.labels_[idx]].append((int(self.key_points[idx].pt[0]), int(self.key_points[idx].pt[1])))
 
-# Detect duplicate blocks and classify them as original and forged
-def detect_copy_move_forgery(features, positions, threshold=0.2):
-    matches = []
-    dist_matrix = cdist(features, features, 'euclidean')
-    np.fill_diagonal(dist_matrix, np.inf)  # Ignore self-comparisons
+        for points in cluster_list:
+            if len(points) > 1:
+                for idx1 in range(1, len(points)):
+                    cv2.line(forgery, points[0], points[idx1], (255, 0, 0), 5)
+        
+        return forgery
 
-    for i in range(len(features)):
-        for j in range(i + 1, len(features)):
-            if dist_matrix[i][j] < threshold:  # Similarity threshold
-                if abs(positions[i][0] - positions[j][0]) > 1 or abs(positions[i][1] - positions[j][1]) > 1:
-                    matches.append((positions[i], positions[j]))
-    return matches
-
-
-# Visualize detected forgery regions with clear labeling
-def visualize_forgery(img, matches, block_size, output_path):
-    img_copy = img.copy()  # Keep the original color image
-
-    # Highlight forged regions with yellow circles and label them
-    for pos1, pos2 in matches:
-        center1 = (pos1[1] + block_size // 2, pos1[0] + block_size // 2)
-        center2 = (pos2[1] + block_size // 2, pos2[0] + block_size // 2)
-        radius = block_size
-
-        # Draw yellow circles around original and copied parts
-        cv2.circle(img_copy, center1, radius, (0, 255, 255), 2)  # Yellow circle for original
-        cv2.circle(img_copy, center2, radius, (0, 255, 255), 2)  # Yellow circle for copied
-
-        # Add labels
-        cv2.putText(img_copy, 'Original', (center1[0] - 20, center1[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
-        cv2.putText(img_copy, 'Copied', (center2[0] - 20, center2[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
-
-    # Labeling the image
-    cv2.putText(img_copy, 'Copy-Move Forgery Detection', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-
-    # Convert from BGR to RGB before displaying with matplotlib
-    plt.imshow(cv2.cvtColor(img_copy, cv2.COLOR_BGR2RGB))
-    plt.title("Detected Forgery")
-    plt.axis("off")
-    plt.savefig(output_path)  # Save the output image
-    plt.show()
-
-# Main function to process the image and detect forgery
-def process_image(image_path, block_size=8, output_folder="output"):
-    try:
-        if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
-
-        img = load_image(image_path, resize_factor=0.8)
-        blocks, positions = divide_into_blocks(img, block_size, stride=2)
-        features = extract_features(blocks, max_blocks=1000)
-        matches = detect_copy_move_forgery(features, positions, threshold=0.2)
-
-        if matches:
-            messagebox.showinfo("Forgery Detected", f"Copy-move forgery detected! Found {len(matches)} matching regions.")
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            output_path = os.path.join(output_folder, f"detected_forgery_{timestamp}.jpg")
-            visualize_forgery(img, matches, block_size, output_path)
-        else:
-            messagebox.showinfo("No Forgery", "No copy-move forgery detected.")
-    except Exception as e:
-        messagebox.showerror("Error", str(e))
-
-# Create a Tkinter GUI for user input and display
-def create_gui():
+def choose_image():
+    # Create a Tkinter root window and hide it
     root = tk.Tk()
-    root.title("Image Forgery Detection")
+    root.withdraw()
 
-    label = tk.Label(root, text="Choose an image for forgery detection:")
-    label.pack(pady=10)
+    # Open file dialog to choose an image
+    image_path = filedialog.askopenfilename(title="Select an Image", filetypes=[("Image Files", "*.jpg;*.jpeg;*.png")])
+    
+    # Check if an image was selected
+    if image_path:
+        image = cv2.imread(image_path)  # Load the selected image
+        return image
+    else:
+        print("No image selected. Exiting.")
+        return None
 
-    image_path_entry = tk.Entry(root, width=40)
-    image_path_entry.pack(pady=10)
+def check_forgery(image):
+    detect_obj = Detect(image)
+    detect_obj.siftDetector()
+    forgery_image = detect_obj.locateForgery()
 
-    def browse_image():
-        filename = filedialog.askopenfilename(filetypes=[("Image Files", "*.jpg;*.jpeg;*.png")])
-        image_path_entry.delete(0, tk.END)
-        image_path_entry.insert(0, filename)
+    if forgery_image is not None:
+        cv2.imshow("Forgery Detection", forgery_image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    else:
+        print("No forgery detected!")
 
-    browse_button = tk.Button(root, text="Browse", command=browse_image)
-    browse_button.pack(pady=10)
-
-    def detect_forgery():
-        image_path = image_path_entry.get()
-        if image_path:
-            process_image(image_path, block_size=8, output_folder="output")
-        else:
-            messagebox.showwarning("Input Error", "Please select an image first.")
-
-    detect_button = tk.Button(root, text="Detect Forgery", command=detect_forgery)
-    detect_button.pack(pady=20)
-
-    root.mainloop()
-
-# Run the program
 if __name__ == "__main__":
-    create_gui()
+    # Choose an image via file dialog
+    image = choose_image()
+
+    if image is not None:
+        check_forgery(image)
