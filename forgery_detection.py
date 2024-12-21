@@ -15,7 +15,7 @@ class Detect(object):
         return self.key_points, self.descriptors
 
     def showSiftFeatures(self):
-        gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+        # gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
         sift_image = cv2.drawKeypoints(self.image, self.key_points, self.image.copy())
         return sift_image
 
@@ -42,6 +42,7 @@ class Detect(object):
                     cv2.line(forgery, points[0], points[idx1], (255, 0, 0), 5)
         
         return forgery
+
 
 def choose_image():
     # Create a Tkinter root window and hide it
