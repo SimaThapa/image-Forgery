@@ -6,11 +6,11 @@ from tkinter import filedialog
 
 class Detect(object):
     def __init__(self, image):
-        self.image = image
+        self.image = image  #assume image is loaded and stired in numpy array
 
     def siftDetector(self):
-        sift = cv2.SIFT_create()  # Corrected SIFT creation method
-        gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+        sift = cv2.SIFT_create()  # Corrected SIFT creation method detect key point based on local intensity and compute their descriptors
+        gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY) #convert image from BGR to grayscale
         self.key_points, self.descriptors = sift.detectAndCompute(gray, None)
         return self.key_points, self.descriptors
 
@@ -66,9 +66,9 @@ def check_forgery(image):
     forgery_image = detect_obj.locateForgery()
 
     if forgery_image is not None:
-        cv2.imshow("Forgery Detection", forgery_image)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        cv2.imshow("Forgery Detection", forgery_image)  #display an image on window
+        cv2.waitKey(0)    #waits for any key press
+        cv2.destroyAllWindows()  #closes all opncv window
     else:
         print("No forgery detected!")
 
