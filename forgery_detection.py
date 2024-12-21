@@ -25,7 +25,7 @@ class Detect(object):
         forgery = self.image.copy()
         
         if (size == 0) and (np.unique(clusters.labels_)[0] == -1):
-            print('No Forgery Found!!')
+            print('No Forgery Found!!')   ##if image is not forged
             return None
         
         if size == 0:
