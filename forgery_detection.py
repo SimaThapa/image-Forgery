@@ -42,7 +42,7 @@ class Detect(object):
                     cv2.line(forgery, points[0], points[idx1], (255, 0, 0), 5)
         
         return forgery
-
+#my name is ashika
 
 def choose_image():
     # Create a Tkinter root window and hide it
