@@ -11,6 +11,7 @@ class Detect(object):
     def siftDetector(self):
         sift = cv2.SIFT_create()  # Corrected SIFT creation method detect key point based on local intensity and compute their descriptors
         gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY) #convert image from BGR to grayscale
+        print("Gary",gray)
         self.key_points, self.descriptors = sift.detectAndCompute(gray, None)
         return self.key_points, self.descriptors
 
