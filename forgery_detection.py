@@ -61,16 +61,37 @@ def choose_image():
         return None
 
 def check_forgery(image):
+    # Get screen dimensions
+    screen_width = 800  # Adjust these values according to your screen
+    screen_height = 600
+
+    # Resize image if it exceeds screen dimensions
+    h, w, _ = image.shape
+    scale_factor = min(screen_width / w, screen_height / h, 1)  # Ensures the image fits within the screen
+    if scale_factor < 1:
+        new_width = int(w * scale_factor)
+        new_height = int(h * scale_factor)
+        image = cv2.resize(image, (new_width, new_height))
+
     detect_obj = Detect(image)
     detect_obj.siftDetector()
     forgery_image = detect_obj.locateForgery()
 
     if forgery_image is not None:
-        cv2.imshow("Forgery Detection", forgery_image)  #display an image on window
-        cv2.waitKey(0)    #waits for any key press
-        cv2.destroyAllWindows()  #closes all opncv window
+        # Resize the forgery image similarly to fit the screen
+        h, w, _ = forgery_image.shape
+        scale_factor = min(screen_width / w, screen_height / h, 1)
+        if scale_factor < 1:
+            new_width = int(w * scale_factor)
+            new_height = int(h * scale_factor)
+            forgery_image = cv2.resize(forgery_image, (new_width, new_height))
+        
+        cv2.imshow("Forgery Detection", forgery_image)  # Display the image in a window
+        cv2.waitKey(0)  # Wait for any key press
+        cv2.destroyAllWindows()  # Close all OpenCV windows
     else:
         print("No forgery detected!")
+
 
 if __name__ == "__main__":
     # Choose an image via file dialog
